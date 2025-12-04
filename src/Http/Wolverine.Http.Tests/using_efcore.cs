@@ -149,4 +149,47 @@ public class using_efcore : IntegrationContext
         scheduledMessage.ScheduleDelay.ShouldNotBeNull();
         scheduledMessage.Message.ShouldBeOfType<ItemCreated>();
     }
+
+    [Fact]
+    public async Task using_storage_insert()
+    {
+        await cleanItems();
+
+        var command = new CreateItemCommand { Name = "Jerick McKinnon" };
+
+        await Scenario(x =>
+        {
+            x.Post.Json(command).ToUrl("/ef/insert");
+            x.StatusCodeShouldBe(200);
+        });
+
+        using var nested = Host.Services.CreateScope();
+        var context = nested.ServiceProvider.GetRequiredService<ItemsDbContext>();
+
+        var item = await context.Items.Where(x => x.Name == command.Name).FirstOrDefaultAsync();
+        item.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task using_storage_insert_with_outbox()
+    {
+        await cleanItems();
+
+        var command = new CreateItemCommand { Name = "Jerick McKinnon" };
+
+        var (tracked, _) = await TrackedHttpCall(x =>
+        {
+            x.Post.Json(command).ToUrl("/ef/insert-and-publish");
+            x.StatusCodeShouldBe(200);
+        });
+
+        var sentMessage = tracked.Sent.SingleEnvelope<ItemCreated>();
+        sentMessage.Message.ShouldBeOfType<ItemCreated>();
+
+        using var nested = Host.Services.CreateScope();
+        var context = nested.ServiceProvider.GetRequiredService<ItemsDbContext>();
+
+        var item = await context.Items.Where(x => x.Name == command.Name).FirstOrDefaultAsync();
+        item.ShouldNotBeNull();
+    }
 }

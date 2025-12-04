@@ -1,6 +1,7 @@
 using JasperFx.Core;
 using Wolverine;
 using Wolverine.Http;
+using Wolverine.Persistence;
 
 namespace WolverineWebApi;
 
@@ -36,5 +37,19 @@ public class EfCoreEndpoints
     public async Task ScheduleItem_NoDb(CreateItemCommand command, IMessageBus bus)
     {
         await bus.PublishAsync(new ItemCreated { Id = Guid.NewGuid() }, new() { ScheduleDelay = 5.Days() });
+    }
+
+    [WolverinePost("/ef/insert")]
+    public (Guid, IStorageAction<Item>) InsertItem(CreateItemCommand command)
+    {
+        var entity = new Item { Name = command.Name };
+        return (entity.Id, Storage.Insert(entity));
+    }
+
+    [WolverinePost("/ef/insert-and-publish")]
+    public (Guid, IStorageAction<Item>, ItemCreated) InsertAndPublishItem(CreateItemCommand command)
+    {
+        var entity = new Item { Name = command.Name };
+        return (entity.Id, Storage.Insert(entity), new ItemCreated { Id = entity.Id });
     }
 }
